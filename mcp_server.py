@@ -15,6 +15,25 @@ def run_tool(name, args):
     else:
         raise ValueError(f"Unknown tool: {name}")
 
+from typing import Any, Dict, List, Optional
+
+try:
+    from mcp.server.fastmcp import FastMCP
+except ImportError as exc:
+    raise SystemExit("MCP requires the mcp package. Run: python -m pip install -r requirements.txt") from exc
+
+mcp = FastMCP('genpark-agent-exfiltration-canary-leak-detector-skill')
+
+@mcp.tool()
+def generate_canary(label: str = "customer_credit_cards", metadata: Optional[Dict[str, Any]] = None) -> str:
+    """Generate a canary token in the local detector state."""
+    return json.dumps(run_tool('generate_canary', {'label': label, 'metadata': metadata if metadata is not None else {}}))
+
+@mcp.tool()
+def scan_outgoing_traffic(payload: str = "") -> str:
+    """Scan supplied text for previously registered canary tokens."""
+    return json.dumps(run_tool('scan_outgoing_traffic', {'payload': payload}))
+
 def main():
     if "--test" in sys.argv:
         print("[TEST] Running GenPark Exfiltration Canary Detector Self-Test...")
@@ -29,15 +48,7 @@ def main():
         print("[TEST] All tests passed successfully!")
         return
 
-    for line in sys.stdin:
-        if not line.strip(): continue
-        try:
-            req = json.loads(line)
-            res = run_tool(req.get("name"), req.get("arguments", {}))
-            print(json.dumps({"jsonrpc": "2.0", "id": req.get("id"), "result": res}))
-        except Exception as e:
-            print(json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32603, "message": str(e)}}))
-        sys.stdout.flush()
+    mcp.run(transport="stdio")
 
 if __name__ == "__main__":
     main()
